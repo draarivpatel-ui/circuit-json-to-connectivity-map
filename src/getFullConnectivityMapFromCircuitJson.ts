@@ -45,12 +45,22 @@ export const getFullConnectivityMapFromCircuitJson = (
           element.source_trace_id,
           ...(element.connected_source_port_ids ?? []),
           ...(element.connected_source_net_ids ?? []),
-        ].filter(Boolean),
+          element.subcircuit_connectivity_map_key,
+        ].filter((id): id is string => Boolean(id)),
       )
     } else if (element.type === "source_port") {
-      sourceConnections.push([element.source_port_id])
+      sourceConnections.push(
+        [
+          element.source_port_id,
+          element.subcircuit_connectivity_map_key,
+        ].filter((id): id is string => Boolean(id)),
+      )
     } else if (element.type === "source_net") {
-      sourceConnections.push([element.source_net_id])
+      sourceConnections.push(
+        [element.source_net_id, element.subcircuit_connectivity_map_key].filter(
+          (id): id is string => Boolean(id),
+        ),
+      )
     } else if (element.type === "pcb_port") {
       const { pcb_port_id, source_port_id } = element
       if (source_port_id && pcb_port_id) {
@@ -82,7 +92,9 @@ export const getFullConnectivityMapFromCircuitJson = (
             (id): id is string => Boolean(id),
           ),
         )
-        pcbEndpointConnections.push([pcb_trace_id, ...endpointIds])
+        if (endpointIds.length > 0) {
+          pcbEndpointConnections.push([pcb_trace_id, ...endpointIds])
+        }
       }
     } else if (element.type === "pcb_via") {
       const { pcb_via_id, pcb_trace_id, source_trace_id, source_net_id } =
