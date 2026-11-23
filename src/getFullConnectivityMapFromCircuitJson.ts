@@ -59,6 +59,20 @@ export const getFullConnectivityMapFromCircuitJson = (
       sourceConnections.push([element.source_port_id])
     } else if (element.type === "source_net") {
       sourceConnections.push([element.source_net_id])
+    } else if (element.type === "source_manually_placed_via") {
+      const sourcePortIds = circuitJson.flatMap((sourcePort) =>
+        sourcePort.type === "source_port" &&
+        sourcePort.source_component_id === element.source_manually_placed_via_id
+          ? [sourcePort.source_port_id]
+          : [],
+      )
+      sourceConnections.push(
+        [
+          ...sourcePortIds,
+          element.source_net_id,
+          element.source_trace_id,
+        ].filter((id): id is string => Boolean(id)),
+      )
     } else if (element.type === "pcb_port") {
       const { pcb_port_id, source_port_id } = element
       if (source_port_id && pcb_port_id) {
