@@ -2,13 +2,14 @@ import { expect, test } from "bun:test"
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import { gunzipSync } from "node:zlib"
+import "bun-match-svg"
 import type { AnyCircuitElement } from "circuit-json"
 import {
   getFullConnectivityMapFromCircuitJson,
   getSourcePortConnectivityMapFromCircuitJson,
 } from "../src"
 
-test("the full NEMA8 board keeps VM and GND separate despite a conflicting PCB endpoint", () => {
+test("the full NEMA8 board keeps VM and GND separate despite a conflicting PCB endpoint", async () => {
   const bytes = gunzipSync(
     readFileSync(
       new URL("./fixtures/nema8-controller/circuit.json.gz", import.meta.url),
@@ -31,10 +32,21 @@ test("the full NEMA8 board keeps VM and GND separate despite a conflicting PCB e
   for (const [netId, ids] of Object.entries(fullConnectivity.netMap)) {
     expect(fullConnectivity.getNetConnectedToId(ids[0])).toBe(netId)
   }
-  expect(
-    fullConnectivity.areIdsConnected("source_port_155", "source_port_150"),
-  ).toBe(false)
+  const vmConnectedToGnd = fullConnectivity.areIdsConnected(
+    "source_port_155",
+    "source_port_150",
+  )
+  expect(vmConnectedToGnd).toBe(false)
   expect(
     fullConnectivity.areIdsConnected("source_trace_8", "pcb_port_150"),
   ).toBe(false)
+
+  const visualRepro = readFileSync(
+    new URL("./fixtures/nema8-controller/visual-repro.svg", import.meta.url),
+    "utf8",
+  )
+    .replace("{{result_label}}", "Full connectivity map")
+    .replace("{{outcome}}", `VM connected to GND: ${vmConnectedToGnd}`)
+    .replace("{{expected}}", "Expected: false (two separate nets)")
+  await expect(visualRepro).toMatchSvgSnapshot(import.meta.path)
 })
