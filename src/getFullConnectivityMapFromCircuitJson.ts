@@ -150,5 +150,12 @@ export const getFullConnectivityMapFromCircuitJson = (
     }
   }
 
+  // Expose each intended group once, without historical aliases from addConnections.
+  for (const [netId, ids] of Object.entries(connMap.netMap)) {
+    if (connMap.getNetConnectedToId(ids[0]) !== netId) {
+      delete connMap.netMap[netId]
+    }
+  }
+
   return connMap
 }

@@ -28,6 +28,9 @@ test("the full NEMA8 board keeps VM and GND separate despite a conflicting PCB e
   ).toBe(false)
 
   const fullConnectivity = getFullConnectivityMapFromCircuitJson(circuitJson)
+  for (const [netId, ids] of Object.entries(fullConnectivity.netMap)) {
+    expect(fullConnectivity.getNetConnectedToId(ids[0])).toBe(netId)
+  }
   expect(
     fullConnectivity.areIdsConnected("source_port_155", "source_port_150"),
   ).toBe(false)
