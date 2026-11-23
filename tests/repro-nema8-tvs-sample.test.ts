@@ -8,7 +8,7 @@ import {
 } from "../src"
 import fixture from "./fixtures/nema8-tvs-sample/circuit.json"
 
-test("the NEMA8 TVS sample merges VM and GND through a saved PCB endpoint", async () => {
+test("the NEMA8 TVS sample keeps intended VM and GND nets separate", async () => {
   const circuitJson = fixture as AnyCircuitElement[]
   const sourceConnectivity =
     getSourcePortConnectivityMapFromCircuitJson(circuitJson)
@@ -21,10 +21,10 @@ test("the NEMA8 TVS sample merges VM and GND through a saved PCB endpoint", asyn
     "source_port_155",
     "source_port_150",
   )
-  expect(vmConnectedToGnd).toBe(true)
+  expect(vmConnectedToGnd).toBe(false)
   expect(
     fullConnectivity.areIdsConnected("source_trace_8", "pcb_port_150"),
-  ).toBe(true)
+  ).toBe(false)
 
   const resultNote: PcbNoteText = {
     type: "pcb_note_text",
