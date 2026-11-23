@@ -12,3 +12,9 @@ on GND. The saved PCB route owned by `source_trace_8` ends at `pcb_port_150`.
 The source map keeps these nets separate, but the full map merges them through
 that PCB endpoint. That lets a downstream shorts checker treat the bridge as
 an intended connection.
+
+`visual-repro.svg` isolates the two TVS copper pads, C_VM_HF1.pin1 and the
+conflicting route. Positions and widths are copied from the capture, with top
+copper dashed over bottom copper in the same board coordinate frame. The SVG
+snapshot fills its result from the full map's actual VM/GND connectivity;
+the test input remains the entire unchanged circuit.
