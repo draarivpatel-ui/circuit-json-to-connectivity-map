@@ -1,12 +1,15 @@
 import type { AnyCircuitElement, PcbTraceRoutePoint } from "circuit-json"
 import { ConnectivityMap } from "./ConnectivityMap"
+import { findConnectedNetworks } from "./findConnectedNetworks"
+
+type Connection = string[]
 
 function addPcbConnection({
   connection,
   connMap,
   sourceConnectivityNetIds,
 }: {
-  connection: string[]
+  connection: Connection
   connMap: ConnectivityMap
   sourceConnectivityNetIds: Set<string>
 }) {
@@ -17,10 +20,9 @@ function addPcbConnection({
         (netId) => netId !== undefined && sourceConnectivityNetIds.has(netId),
       ),
   )
-  if (sourceNetIds.size > 1) return
+  if (sourceNetIds.size > 1) return false
 
   const [sourceNetId] = sourceNetIds
-  // Keep the source net canonical when attaching previously unowned PCB IDs.
   if (sourceNetId) {
     connMap.addConnections([
       [connMap.getIdsConnectedToNet(sourceNetId)[0], ...connection],
@@ -28,25 +30,31 @@ function addPcbConnection({
   } else {
     connMap.addConnections([connection])
   }
+  return true
 }
 
 /** Maps PCB objects to intended source nets without letting PCB references merge them. */
 export const getFullConnectivityMapFromCircuitJson = (
   circuitJson: AnyCircuitElement[],
 ) => {
-  const sourceConnections: string[][] = []
-  const pcbConnections: string[][] = []
-  const pcbEndpointConnections: string[][] = []
+  const connections: Connection[] = []
+  const sourceConnections: Connection[] = []
+  const pcbConnections: Connection[] = []
+  const viaConnections: Connection[] = []
+  const traceEndpointConnections: {
+    pcbTraceId: string
+    connections: Connection[]
+  }[] = []
 
   for (const element of circuitJson) {
     if (element.type === "source_trace") {
-      sourceConnections.push(
-        [
-          element.source_trace_id,
-          ...(element.connected_source_port_ids ?? []),
-          ...(element.connected_source_net_ids ?? []),
-        ].filter((id): id is string => Boolean(id)),
-      )
+      const connection = [
+        element.source_trace_id,
+        ...(element.connected_source_port_ids ?? []),
+        ...(element.connected_source_net_ids ?? []),
+      ].filter(Boolean)
+      sourceConnections.push(connection)
+      connections.push(connection)
     } else if (element.type === "source_port") {
       sourceConnections.push([element.source_port_id])
     } else if (element.type === "source_net") {
@@ -54,57 +62,69 @@ export const getFullConnectivityMapFromCircuitJson = (
     } else if (element.type === "pcb_port") {
       const { pcb_port_id, source_port_id } = element
       if (source_port_id && pcb_port_id) {
-        pcbConnections.push([source_port_id, pcb_port_id])
+        const connection = [source_port_id, pcb_port_id]
+        pcbConnections.push(connection)
+        connections.push(connection)
       }
     } else if (element.type === "pcb_smtpad") {
       const { pcb_smtpad_id, pcb_port_id } = element
       if (pcb_port_id && pcb_smtpad_id) {
-        pcbConnections.push([pcb_smtpad_id, pcb_port_id])
+        const connection = [pcb_smtpad_id, pcb_port_id]
+        pcbConnections.push(connection)
+        connections.push(connection)
       }
     } else if (element.type === "pcb_plated_hole") {
       const { pcb_plated_hole_id, pcb_port_id } = element
       if (pcb_port_id && pcb_plated_hole_id) {
-        pcbConnections.push([pcb_plated_hole_id, pcb_port_id])
+        const connection = [pcb_plated_hole_id, pcb_port_id]
+        pcbConnections.push(connection)
+        connections.push(connection)
       }
     } else if (element.type === "pcb_trace") {
       const { pcb_trace_id, source_trace_id } = element
+      if (source_trace_id && pcb_trace_id) {
+        const connection = [pcb_trace_id, source_trace_id]
+        pcbConnections.push(connection)
+        connections.push(connection)
+      }
       const route = Array.isArray(element.route)
         ? element.route.filter(
             (rp: PcbTraceRoutePoint) => rp && rp.route_type === "wire",
           )
         : []
-      if (source_trace_id && pcb_trace_id) {
-        pcbConnections.push([pcb_trace_id, source_trace_id])
-      }
-      if (Array.isArray(route)) {
-        const endpointIds = route.flatMap((rp) =>
-          [rp.start_pcb_port_id, rp.end_pcb_port_id].filter(
-            (id): id is string => Boolean(id),
-          ),
-        )
-        if (endpointIds.length > 0) {
-          pcbEndpointConnections.push([pcb_trace_id, ...endpointIds])
+      const endpointConnections: Connection[] = []
+      for (const point of route) {
+        if (point.start_pcb_port_id) {
+          endpointConnections.push([point.start_pcb_port_id, pcb_trace_id])
+        }
+        if (point.end_pcb_port_id) {
+          endpointConnections.push([pcb_trace_id, point.end_pcb_port_id])
         }
       }
+      traceEndpointConnections.push({
+        pcbTraceId: pcb_trace_id,
+        connections: endpointConnections,
+      })
+      connections.push(...endpointConnections)
     } else if (element.type === "pcb_via") {
       const { pcb_via_id, pcb_trace_id, source_trace_id, source_net_id } =
         element
       const connectedIds = [
+        ...(element.pcb_port_ids ?? []),
         pcb_trace_id,
         source_trace_id,
         source_net_id,
-      ].filter((connectedId): connectedId is string => Boolean(connectedId))
+      ].filter((id): id is string => Boolean(id))
       if (pcb_via_id && connectedIds.length > 0) {
-        pcbConnections.push([pcb_via_id, ...connectedIds])
-      }
-      if (element.pcb_port_ids?.length) {
-        pcbEndpointConnections.push([pcb_via_id, ...element.pcb_port_ids])
+        const connection = [pcb_via_id, ...connectedIds]
+        viaConnections.push(connection)
+        connections.push(connection)
       }
     } else if (element.type === "source_component") {
-      if (element.internally_connected_source_port_ids) {
-        for (const portGroup of element.internally_connected_source_port_ids) {
-          sourceConnections.push(portGroup)
-        }
+      for (const portGroup of element.internally_connected_source_port_ids ??
+        []) {
+        sourceConnections.push(portGroup)
+        connections.push(portGroup)
       }
     } else if (element.type === "source_component_internal_connection") {
       sourceConnections.push(element.source_port_ids)
@@ -114,38 +134,49 @@ export const getFullConnectivityMapFromCircuitJson = (
   const connMap = new ConnectivityMap({})
   connMap.addConnections(sourceConnections)
   const sourceConnectivityNetIds = new Set(Object.values(connMap.idToNetMap))
+  const allowedConnections = new Set(sourceConnections)
 
-  for (const connection of pcbConnections) {
-    addPcbConnection({ connection, connMap, sourceConnectivityNetIds })
+  for (const connection of [...pcbConnections, ...viaConnections]) {
+    if (addPcbConnection({ connection, connMap, sourceConnectivityNetIds })) {
+      allowedConnections.add(connection)
+    }
   }
 
-  for (const [pcbId, ...endpointIds] of pcbEndpointConnections) {
-    const pcbNetId = connMap.getNetConnectedToId(pcbId)
-    if (pcbNetId && sourceConnectivityNetIds.has(pcbNetId)) {
+  for (const trace of traceEndpointConnections) {
+    const traceNetId = connMap.getNetConnectedToId(trace.pcbTraceId)
+    if (traceNetId && sourceConnectivityNetIds.has(traceNetId)) {
       // An explicit source owner wins over a contradictory saved endpoint.
-      for (const endpointId of endpointIds) {
-        addPcbConnection({
-          connection: [pcbId, endpointId],
-          connMap,
-          sourceConnectivityNetIds,
-        })
+      for (const connection of trace.connections) {
+        if (
+          addPcbConnection({ connection, connMap, sourceConnectivityNetIds })
+        ) {
+          allowedConnections.add(connection)
+        }
       }
-    } else {
-      // Infer an unowned fragment only when its endpoints agree on one source net.
+    } else if (
       addPcbConnection({
-        connection: [pcbId, ...endpointIds],
+        connection: [trace.pcbTraceId, ...trace.connections.flat()],
         connMap,
         sourceConnectivityNetIds,
       })
+    ) {
+      // An unowned fragment can inherit only one intended source net.
+      for (const connection of trace.connections) {
+        allowedConnections.add(connection)
+      }
     }
   }
 
-  // Expose each intended group once, without historical aliases from addConnections.
+  // Retain legacy network IDs and ordering for existing routing consumers.
+  // Extra source-only identities are appended so they do not renumber PCB groups.
+  connMap.netMap = findConnectedNetworks(
+    [...connections, ...sourceConnections].filter((connection) =>
+      allowedConnections.has(connection),
+    ),
+  )
+  connMap.idToNetMap = {}
   for (const [netId, ids] of Object.entries(connMap.netMap)) {
-    if (connMap.getNetConnectedToId(ids[0]) !== netId) {
-      delete connMap.netMap[netId]
-    }
+    for (const id of ids) connMap.idToNetMap[id] = netId
   }
-
   return connMap
 }
