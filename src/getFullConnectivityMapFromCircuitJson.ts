@@ -45,22 +45,12 @@ export const getFullConnectivityMapFromCircuitJson = (
           element.source_trace_id,
           ...(element.connected_source_port_ids ?? []),
           ...(element.connected_source_net_ids ?? []),
-          element.subcircuit_connectivity_map_key,
         ].filter((id): id is string => Boolean(id)),
       )
     } else if (element.type === "source_port") {
-      sourceConnections.push(
-        [
-          element.source_port_id,
-          element.subcircuit_connectivity_map_key,
-        ].filter((id): id is string => Boolean(id)),
-      )
+      sourceConnections.push([element.source_port_id])
     } else if (element.type === "source_net") {
-      sourceConnections.push(
-        [element.source_net_id, element.subcircuit_connectivity_map_key].filter(
-          (id): id is string => Boolean(id),
-        ),
-      )
+      sourceConnections.push([element.source_net_id])
     } else if (element.type === "pcb_port") {
       const { pcb_port_id, source_port_id } = element
       if (source_port_id && pcb_port_id) {
