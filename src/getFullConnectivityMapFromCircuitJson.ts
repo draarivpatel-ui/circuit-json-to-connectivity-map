@@ -13,19 +13,19 @@ function addPcbConnection({
   connMap: ConnectivityMap
   sourceConnectivityNetIds: Set<string>
 }) {
-  const sourceNetIds = new Set(
+  const intendedNetIds = new Set(
     connection
       .map((id) => connMap.getNetConnectedToId(id))
       .filter(
         (netId) => netId !== undefined && sourceConnectivityNetIds.has(netId),
       ),
   )
-  if (sourceNetIds.size > 1) return false
+  if (intendedNetIds.size > 1) return false
 
-  const [sourceNetId] = sourceNetIds
-  if (sourceNetId) {
+  const [intendedNetId] = intendedNetIds
+  if (intendedNetId) {
     connMap.addConnections([
-      [connMap.getIdsConnectedToNet(sourceNetId)[0], ...connection],
+      [connMap.getIdsConnectedToNet(intendedNetId)[0], ...connection],
     ])
   } else {
     connMap.addConnections([connection])
@@ -183,14 +183,12 @@ export const getFullConnectivityMapFromCircuitJson = (
 
   // Retain legacy network IDs and ordering for existing routing consumers.
   // Extra source-only identities are appended so they do not renumber PCB groups.
-  connMap.netMap = findConnectedNetworks(
-    [...connections, ...sourceConnections].filter((connection) =>
-      allowedConnections.has(connection),
+  connMap.setNetMap(
+    findConnectedNetworks(
+      [...connections, ...sourceConnections].filter((connection) =>
+        allowedConnections.has(connection),
+      ),
     ),
   )
-  connMap.idToNetMap = {}
-  for (const [netId, ids] of Object.entries(connMap.netMap)) {
-    for (const id of ids) connMap.idToNetMap[id] = netId
-  }
   return connMap
 }

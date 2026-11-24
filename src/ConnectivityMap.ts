@@ -1,9 +1,13 @@
 export class ConnectivityMap {
-  netMap: Record<string, string[]>
+  netMap: Record<string, string[]> = {}
 
-  idToNetMap: Record<string, string>
+  idToNetMap: Record<string, string> = {}
 
   constructor(netMap: Record<string, string[]>) {
+    this.setNetMap(netMap)
+  }
+
+  setNetMap(netMap: Record<string, string[]>) {
     this.netMap = netMap
     this.idToNetMap = {}
     for (const [netId, ids] of Object.entries(netMap)) {
